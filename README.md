@@ -18,7 +18,8 @@ blijven volledig lokaal op je eigen computer.
 - **Leiding** in de sleuf tekenen met eigen kleur en naam.
 - **Rode locatiepijl** over de kaart, met versleepbare uiteinden en instelbare dikte.
 - **Toelichting** onder de legenda (standaard: de grond wordt na afloop in hetzelfde grondprofiel teruggeplaatst).
-- **Exporteren** als PNG: het losse profiel, of de volledige kaart inclusief profiel en pijl.
+- **Exporteren** als **PNG of PDF**: het losse profiel, of de volledige kaart inclusief profiel en pijl.
+  PDF op tekeninggrootte of passend op A4 (staand/liggend). Geen externe libraries — de PDF wordt in de browser zelf opgebouwd.
 
 ## Gebruik
 
@@ -31,4 +32,4 @@ Eén bestand, geen installatie, geen afhankelijkheden.
 2. Voeg de bodemlagen toe (van/tot, kleur, omschrijving) en wijs ze toe aan een depot.
 3. Vink **Toon depots** aan en stel per depot de naam en de kant (links/rechts) in.
 4. Sleep het profiel en de rode pijl naar de juiste plek op de kaart en stel de grootte in.
-5. Download het resultaat als PNG.
+5. Download het resultaat als PNG of PDF.

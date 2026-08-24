@@ -123,6 +123,7 @@
         .btn-remove { background: #ef4444; color: white; padding: 4px 8px; }
         .btn-print { background: #10b981; color: white; padding: 10px 15px; }
         .btn-export { background: #1e3a8a; color: white; padding: 10px 15px; }
+        .btn-pdf { background: #ffb81c; color: #1e3a8a; padding: 10px 15px; }
         
         /* SVG Styles */
         .lijn-dik { stroke: #000; stroke-width: 2px; }
@@ -199,8 +200,21 @@
             <input type="range" id="thickArrow" min="2" max="20" step="1" value="5" oninput="updateArrowThickness()">
         </label>
         
-        <button onclick="downloadFullMap()" class="btn-print">Download Volledige Kaart (PNG)</button>
-        <button onclick="downloadProfilePNG()" class="btn-export">Download Los Profiel (PNG)</button>
+        <label>PDF-formaat:
+            <select id="pdfPageSize">
+                <option value="auto">Op maat (tekeninggrootte)</option>
+                <option value="a4l">A4 liggend</option>
+                <option value="a4p">A4 staand</option>
+            </select>
+        </label>
+    </div>
+
+    <div style="display:flex; gap:10px; align-items:center; margin-top:12px; flex-wrap:wrap;">
+        <button onclick="downloadFullMap()" class="btn-print">Volledige Kaart (PNG)</button>
+        <button onclick="downloadFullMapPDF()" class="btn-pdf">Volledige Kaart (PDF)</button>
+        <span style="color:#cbd5e1;">|</span>
+        <button onclick="downloadProfilePNG()" class="btn-export">Los Profiel (PNG)</button>
+        <button onclick="downloadProfilePDF()" class="btn-pdf">Los Profiel (PDF)</button>
     </div>
 </div>
 
@@ -693,111 +707,245 @@ function wrapText(text, maxChars) {
 // init
 renderProfile();
 
-function downloadFullMap() {
+// ============================================================
+//  EXPORT: PNG en PDF (zonder externe libraries)
+// ============================================================
+
+function svgToImage(svgEl, forceW, forceH) {
+    return new Promise(function(resolve, reject) {
+        let clone = svgEl.cloneNode(true);
+        clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+        clone.removeAttribute('style');
+        if (forceW && forceH) {
+            clone.setAttribute('width', forceW);
+            clone.setAttribute('height', forceH);
+            if (!clone.getAttribute('viewBox')) {
+                clone.setAttribute('viewBox', `0 0 ${forceW} ${forceH}`);
+            }
+        }
+        let src = new XMLSerializer().serializeToString(clone);
+        let img = new Image();
+        img.onload = function() { resolve(img); };
+        img.onerror = function() { reject(new Error('SVG kon niet worden omgezet naar een afbeelding.')); };
+        img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(src);
+    });
+}
+
+// Canvas met alleen het profiel (S = extra resolutie-factor)
+async function buildProfileCanvas(S) {
+    let svg = document.getElementById('profielSvg');
+    let w = svg.width.baseVal.value;
+    let h = svg.height.baseVal.value;
+    let canvas = document.createElement('canvas');
+    canvas.width = Math.round(w * S);
+    canvas.height = Math.round(h * S);
+    let ctx = canvas.getContext('2d');
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    let img = await svgToImage(svg, w, h);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    return { canvas: canvas, w: w, h: h };
+}
+
+// Canvas met de volledige kaart + pijl + profiel
+async function buildFullMapCanvas(S) {
     let container = document.getElementById('container');
     let mapImg = document.getElementById('mapImg');
-    
-    if(!mapImg.src || mapImg.src === window.location.href) {
-        alert("Laad eerst een kaart in!");
-        return;
-    }
-    
+    let W = container.offsetWidth;
+    let H = container.offsetHeight;
+
     let canvas = document.createElement('canvas');
-    canvas.width = container.offsetWidth;
-    canvas.height = container.offsetHeight;
+    canvas.width = Math.round(W * S);
+    canvas.height = Math.round(H * S);
     let ctx = canvas.getContext('2d');
-    
-    // Draw Map Image
-    ctx.drawImage(mapImg, 0, 0, canvas.width, canvas.height);
-    
-    // Draw Arrow Overlay SVG
-    let overlaySvg = document.getElementById('overlaySvg');
-    let serializer = new XMLSerializer();
-    let overlaySource = serializer.serializeToString(overlaySvg);
-    if(!overlaySource.match(/^<svg[^>]+xmlns="http\:\/\/www\.w3\.org\/2000\/svg"/)){
-        overlaySource = overlaySource.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');
-    }
-    // Force explicit dimensions so the SVG rasters correctly
-    overlaySource = overlaySource.replace(/^<svg/, `<svg width="${canvas.width}" height="${canvas.height}"`);
-    
-    let overlayImg = new Image();
-    overlayImg.onload = function() {
-        ctx.drawImage(overlayImg, 0, 0, canvas.width, canvas.height);
-        
-        // Draw Profile SVG
-        let profiel = document.getElementById('profiel');
-        let profielSvg = document.getElementById('profielSvg');
-        let pSource = serializer.serializeToString(profielSvg);
-        if(!pSource.match(/^<svg[^>]+xmlns="http\:\/\/www\.w3\.org\/2000\/svg"/)){
-            pSource = pSource.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');
-        }
-        
-        let pImg = new Image();
-        pImg.onload = function() {
-            let pLeft = profiel.offsetLeft;
-            let pTop = profiel.offsetTop;
-            let scale = parseFloat(document.getElementById('scaleProfile').value);
-            let pWidth = profiel.offsetWidth * scale;
-            let pHeight = profiel.offsetHeight * scale;
-            
-            // Draw white background for the profile
-            ctx.fillStyle = "rgba(255,255,255,0.95)";
-            ctx.fillRect(pLeft, pTop, pWidth, pHeight);
-            ctx.strokeStyle = "black";
-            ctx.lineWidth = 1;
-            ctx.strokeRect(pLeft, pTop, pWidth, pHeight);
-            
-            // Draw the profile SVG onto canvas
-            ctx.drawImage(pImg, pLeft, pTop, pWidth, pHeight);
-            
-            // Download as PNG
-            let finalURL = canvas.toDataURL("image/png");
-            let dlLink = document.createElement('a');
-            dlLink.download = "Antea_Volledige_Kaart.png";
-            dlLink.href = finalURL;
-            document.body.appendChild(dlLink);
-            dlLink.click();
-            document.body.removeChild(dlLink);
-        };
-        pImg.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(pSource);
-    };
-    overlayImg.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(overlaySource);
-}
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.scale(S, S);
 
-function downloadProfilePNG() {
+    if (mapImg.src && mapImg.naturalWidth) {
+        ctx.drawImage(mapImg, 0, 0, W, H);
+    }
+
+    // Pijl-overlay
+    let overlay = await svgToImage(document.getElementById('overlaySvg'), W, H);
+    ctx.drawImage(overlay, 0, 0, W, H);
+
+    // Profiel (witte kader + tekening)
+    let profiel = document.getElementById('profiel');
     let svg = document.getElementById('profielSvg');
-    let serializer = new XMLSerializer();
-    let source = serializer.serializeToString(svg);
-    
-    if(!source.match(/^<svg[^>]+xmlns="http\:\/\/www\.w3\.org\/2000\/svg"/)){
-        source = source.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');
-    }
-    
-    source = source.replace(/^<svg/, '<svg style="background-color: white;" ');
+    let scale = parseFloat(document.getElementById('scaleProfile').value);
+    let pLeft = profiel.offsetLeft, pTop = profiel.offsetTop;
+    let boxW = profiel.offsetWidth * scale, boxH = profiel.offsetHeight * scale;
 
-    let svgData = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(source);
-    
-    let canvas = document.createElement("canvas");
-    canvas.width = svg.width.baseVal.value;
-    canvas.height = svg.height.baseVal.value;
-    let ctx = canvas.getContext("2d");
-    
-    let img = new Image();
-    img.onload = function() {
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(img, 0, 0);
-        
-        let imgURL = canvas.toDataURL("image/png");
-        let dlLink = document.createElement('a');
-        dlLink.download = "Antea_Dwarsprofiel.png";
-        dlLink.href = imgURL;
-        document.body.appendChild(dlLink);
-        dlLink.click();
-        document.body.removeChild(dlLink);
-    };
-    img.src = svgData;
+    ctx.fillStyle = "rgba(255,255,255,0.95)";
+    ctx.fillRect(pLeft, pTop, boxW, boxH);
+    ctx.strokeStyle = "#000";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(pLeft, pTop, boxW, boxH);
+
+    let sw = svg.width.baseVal.value, sh = svg.height.baseVal.value;
+    let pImg = await svgToImage(svg, sw, sh);
+    // 11px = padding (10) + rand (1) van het kader
+    ctx.drawImage(pImg, pLeft + 11 * scale, pTop + 11 * scale, sw * scale, sh * scale);
+
+    return { canvas: canvas, w: W, h: H };
 }
+
+function triggerDownload(href, filename) {
+    let a = document.createElement('a');
+    a.download = filename;
+    a.href = href;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+}
+
+function mapLoaded() {
+    let mapImg = document.getElementById('mapImg');
+    return mapImg.src && mapImg.src !== window.location.href && mapImg.naturalWidth > 0;
+}
+
+// ---------- PNG ----------
+async function downloadProfilePNG() {
+    let r = await buildProfileCanvas(2);
+    triggerDownload(r.canvas.toDataURL("image/png"), "Antea_Dwarsprofiel.png");
+}
+
+async function downloadFullMap() {
+    if (!mapLoaded()) { alert("Laad eerst een kaart in!"); return; }
+    let r = await buildFullMapCanvas(2);
+    triggerDownload(r.canvas.toDataURL("image/png"), "Antea_Volledige_Kaart.png");
+}
+
+// ---------- PDF ----------
+async function downloadProfilePDF() {
+    let r = await buildProfileCanvas(3);
+    await savePdf(r.canvas, r.w, r.h, "Antea_Dwarsprofiel.pdf");
+}
+
+async function downloadFullMapPDF() {
+    if (!mapLoaded()) { alert("Laad eerst een kaart in!"); return; }
+    let r = await buildFullMapCanvas(3);
+    await savePdf(r.canvas, r.w, r.h, "Antea_Volledige_Kaart.pdf");
+}
+
+// Beeldpunten (CSS px) -> PDF punten (72 dpi)
+const PX_TO_PT = 0.75;
+const A4 = { w: 595.28, h: 841.89 };
+const PDF_MARGIN = 28.35; // 10 mm
+
+async function savePdf(canvas, logicalW, logicalH, filename) {
+    let mode = document.getElementById('pdfPageSize').value;
+    let dw, dh, dx, dy, pw, ph;
+
+    if (mode === 'auto') {
+        pw = logicalW * PX_TO_PT;
+        ph = logicalH * PX_TO_PT;
+        dx = 0; dy = 0; dw = pw; dh = ph;
+    } else {
+        if (mode === 'a4l') { pw = A4.h; ph = A4.w; } else { pw = A4.w; ph = A4.h; }
+        let availW = pw - 2 * PDF_MARGIN, availH = ph - 2 * PDF_MARGIN;
+        let k = Math.min(availW / logicalW, availH / logicalH);
+        dw = logicalW * k; dh = logicalH * k;
+        dx = (pw - dw) / 2; dy = (ph - dh) / 2;
+    }
+
+    let bytes = await buildPdfBytes(canvas, pw, ph, dx, dy, dw, dh);
+    let url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+    triggerDownload(url, filename);
+    setTimeout(function() { URL.revokeObjectURL(url); }, 4000);
+}
+
+function canvasToRGB(canvas) {
+    let ctx = canvas.getContext('2d');
+    let d = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+    let out = new Uint8Array(canvas.width * canvas.height * 3);
+    for (let i = 0, j = 0; i < d.length; i += 4) {
+        let a = d[i + 3] / 255;
+        out[j++] = Math.round(d[i] * a + 255 * (1 - a));
+        out[j++] = Math.round(d[i + 1] * a + 255 * (1 - a));
+        out[j++] = Math.round(d[i + 2] * a + 255 * (1 - a));
+    }
+    return out;
+}
+
+async function deflateBytes(bytes) {
+    if (typeof CompressionStream === 'undefined') return null;
+    try {
+        let stream = new Blob([bytes]).stream().pipeThrough(new CompressionStream('deflate'));
+        let buf = await new Response(stream).arrayBuffer();
+        return new Uint8Array(buf);
+    } catch (e) {
+        return null;
+    }
+}
+
+function dataUriToBytes(uri) {
+    let b64 = uri.substring(uri.indexOf(',') + 1);
+    let bin = atob(b64);
+    let out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+}
+
+async function buildPdfBytes(canvas, pw, ph, dx, dy, dw, dh) {
+    let iw = canvas.width, ih = canvas.height;
+    let filter, data;
+
+    let packed = await deflateBytes(canvasToRGB(canvas));
+    if (packed) {
+        filter = '/FlateDecode';
+        data = packed;
+    } else {
+        filter = '/DCTDecode';
+        data = dataUriToBytes(canvas.toDataURL('image/jpeg', 0.92));
+    }
+
+    let enc = new TextEncoder();
+    let parts = [], length = 0;
+    function put(u8) { parts.push(u8); length += u8.length; }
+    function putStr(s) { put(enc.encode(s)); }
+
+    let offsets = [0];
+    function startObj(n) { offsets[n] = length; }
+
+    put(new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2D, 0x31, 0x2E, 0x34, 0x0A, 0x25, 0xE2, 0xE3, 0xCF, 0xD3, 0x0A]));
+
+    let f = function(v) { return (Math.round(v * 100) / 100).toString(); };
+    let content = `q ${f(dw)} 0 0 ${f(dh)} ${f(dx)} ${f(dy)} cm /Im0 Do Q\n`;
+
+    startObj(1);
+    putStr('1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n');
+
+    startObj(2);
+    putStr('2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n');
+
+    startObj(3);
+    putStr(`3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${f(pw)} ${f(ph)}] `
+        + `/Resources << /XObject << /Im0 5 0 R >> /ProcSet [/PDF /ImageC] >> /Contents 4 0 R >>\nendobj\n`);
+
+    startObj(4);
+    putStr(`4 0 obj\n<< /Length ${enc.encode(content).length} >>\nstream\n${content}endstream\nendobj\n`);
+
+    startObj(5);
+    putStr(`5 0 obj\n<< /Type /XObject /Subtype /Image /Width ${iw} /Height ${ih} `
+        + `/ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter ${filter} /Length ${data.length} >>\nstream\n`);
+    put(data);
+    putStr('\nendstream\nendobj\n');
+
+    let xrefPos = length;
+    let xref = 'xref\n0 6\n0000000000 65535 f \n';
+    for (let n = 1; n <= 5; n++) {
+        xref += String(offsets[n]).padStart(10, '0') + ' 00000 n \n';
+    }
+    xref += `trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xrefPos}\n%%EOF\n`;
+    putStr(xref);
+
+    let out = new Uint8Array(length), pos = 0;
+    parts.forEach(function(p) { out.set(p, pos); pos += p.length; });
+    return out;
+}
+
 </script>
 </body>
 </html>

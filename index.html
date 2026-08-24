@@ -177,7 +177,7 @@
         <span style="margin-left:10px;">Hoogte: <input type="number" id="depotHeight" value="80" min="40" max="200" step="10" style="width:60px" onchange="renderProfile()"></span>
         <span style="margin-left:10px;">Standaardnaam: <input type="text" id="depotLabel" value="Depot" style="width:90px" onchange="renderProfile()"></span>
         <div id="depotConfig" style="margin-top:10px;"></div>
-        <p style="color:#64748b; font-size:13px; margin:6px 0 0;"><em>Kies per laag (hierboven) in welk depot de grond terechtkomt. Meerdere lagen in hetzelfde depot worden als gemengde hoop getekend.</em></p>
+        <p style="color:#64748b; font-size:13px; margin:6px 0 0;"><em>Er zijn twee depots. Kies per laag (hierboven) in welk depot de grond terechtkomt; meerdere lagen in hetzelfde depot worden als gemengde hoop getekend. Een depot zonder lagen wordt niet getekend.</em></p>
         <label style="display:inline-block; margin-top:8px;"><input type="checkbox" id="showDepotNote" checked onchange="renderProfile()"> Toelichting onder legenda (meerdere regels toegestaan):</label>
         <textarea id="depotNote" rows="3" style="width:100%; margin-top:5px;" oninput="renderProfile()">De ontgraven grond wordt na het uitvoeren van de geplande werkzaamheden in hetzelfde grondprofiel teruggeplaatst.</textarea>
     </div>
@@ -399,9 +399,9 @@ function addLayer() {
     }
     let defaultBot = (startTop + 0.5).toFixed(1);
 
-    let nextDepot = Math.min(layers.length + 1, 6);
+    let nextDepot = (layers.length === 0) ? 1 : 2;
     let depotOptions = '<option value="0">Geen</option>';
-    for (let n = 1; n <= 6; n++) {
+    for (let n = 1; n <= MAX_DEPOTS; n++) {
         depotOptions += `<option value="${n}" ${n === nextDepot ? 'selected' : ''}>Depot ${n}</option>`;
     }
 
@@ -423,11 +423,13 @@ function addLayer() {
 }
 
 // --- DEPOT INSTELLINGEN (naam + kant per depot) ---
+// Er zijn altijd precies twee depots beschikbaar zodra depots worden getoond.
+const MAX_DEPOTS = 2;
 let depotSettings = {};
 
 function getDepotSetting(nr) {
     if (!depotSettings[nr]) {
-        depotSettings[nr] = { name: '', side: (nr % 2 === 1) ? 'rechts' : 'links' };
+        depotSettings[nr] = { name: '', side: (nr === 1) ? 'rechts' : 'links' };
     }
     return depotSettings[nr];
 }
@@ -439,20 +441,30 @@ function setDepotSetting(nr, key, value) {
 
 function syncDepotConfig(usedNrs) {
     let box = document.getElementById('depotConfig');
-    let current = [...box.querySelectorAll('.depot-cfg')].map(d => d.dataset.nr).join(',');
-    if (current === usedNrs.join(',')) return;
-    box.innerHTML = usedNrs.map(nr => {
-        let s = getDepotSetting(nr);
-        return `<div class="depot-cfg" data-nr="${nr}" style="display:flex; gap:10px; align-items:center; margin-bottom:6px;">
+    if (box.dataset.built === '1') {
+        // alleen de "leeg"-melding bijwerken
+        for (let nr = 1; nr <= MAX_DEPOTS; nr++) {
+            let hint = box.querySelector(`.depot-cfg[data-nr="${nr}"] .depot-empty`);
+            if (hint) hint.style.display = usedNrs.indexOf(nr) === -1 ? '' : 'none';
+        }
+        return;
+    }
+    let html = '';
+    for (let nr = 1; nr <= MAX_DEPOTS; nr++) {
+        let s2 = getDepotSetting(nr);
+        html += `<div class="depot-cfg" data-nr="${nr}" style="display:flex; gap:10px; align-items:center; margin-bottom:6px; flex-wrap:wrap;">
             <strong style="min-width:70px;">Depot ${nr}</strong>
-            <span>Naam: <input type="text" value="${escAttr(s.name)}" placeholder="(standaardnaam)" style="width:200px"
+            <span>Naam: <input type="text" value="${escAttr(s2.name)}" placeholder="(standaardnaam)" style="width:200px"
                 onchange="setDepotSetting(${nr}, 'name', this.value)"></span>
             <span>Kant: <select onchange="setDepotSetting(${nr}, 'side', this.value)">
-                <option value="rechts" ${s.side === 'rechts' ? 'selected' : ''}>Rechts</option>
-                <option value="links" ${s.side === 'links' ? 'selected' : ''}>Links</option>
+                <option value="rechts" ${s2.side === 'rechts' ? 'selected' : ''}>Rechts</option>
+                <option value="links" ${s2.side === 'links' ? 'selected' : ''}>Links</option>
             </select></span>
+            <em class="depot-empty" style="color:#94a3b8; font-size:13px; display:${usedNrs.indexOf(nr) === -1 ? '' : 'none'};">geen lagen toegewezen</em>
         </div>`;
-    }).join('') || '<em style="color:#64748b; font-size:13px;">Nog geen lagen aan een depot toegewezen.</em>';
+    }
+    box.innerHTML = html;
+    box.dataset.built = '1';
 }
 
 function escAttr(s) {
@@ -482,7 +494,7 @@ function renderProfile() {
            bottom: parseFloat(row.querySelector('.bot').value),
            color: row.querySelector('.col').value,
            desc: row.querySelector('.desc').value,
-           depot: parseInt(row.querySelector('.depot') ? row.querySelector('.depot').value : '0', 10)
+           depot: Math.min(MAX_DEPOTS, parseInt(row.querySelector('.depot') ? row.querySelector('.depot').value : '0', 10) || 0)
        };
     });
     

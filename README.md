@@ -12,9 +12,10 @@ blijven volledig lokaal op je eigen computer.
 
 - **Achtergrondkaart** inladen (PNG/JPG, bijvoorbeeld een uitsnede uit GIS) en het profiel eroverheen slepen en schalen.
 - **Bodemlagen** toevoegen met diepte van/tot, kleur en een omschrijving over meerdere regels.
-- **Depots**: kies per laag naar welk depot de ontgraven grond gaat. Elk depot wordt als
-  driehoekige grondhoop naast de sleuf getekend, links of rechts, met een eigen naam.
-  Meerdere lagen in één depot worden als gemengde hoop met gestapelde kleurbanden weergegeven.
+- **Depots**: er zijn twee depots. Kies per laag naar welk depot de ontgraven grond gaat
+  (of "Geen" als de laag niet wordt ontgraven). Elk depot wordt als driehoekige grondhoop naast
+  de sleuf getekend, links of rechts, met een eigen naam. Meerdere lagen in één depot worden als
+  gemengde hoop met gestapelde kleurbanden weergegeven; een leeg depot wordt niet getekend.
 - **Leiding** in de sleuf tekenen met eigen kleur en naam.
 - **Rode locatiepijl** over de kaart, met versleepbare uiteinden en instelbare dikte.
 - **Toelichting** onder de legenda (standaard: de grond wordt na afloop in hetzelfde grondprofiel teruggeplaatst).

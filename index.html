@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <title>Kaart & Dwarsprofiel Maker</title>
+    <style>
+        body {
+            font-family: "Segoe UI", Arial, sans-serif;
+            background-color: #f0f4f8;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+        }
+        
+        .header-bar {
+            display: flex;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .logo {
+            font-size: 28px;
+            font-family: "Arial", sans-serif;
+            letter-spacing: -0.5px;
+            margin-right: 15px;
+        }
+        .logo .antea { font-weight: 900; color: #1e3a8a; }
+        .logo .group { font-weight: 300; color: #1e3a8a; }
+        
+        h2 {
+            margin: 0;
+            color: #1e3a8a;
+            font-weight: 600;
+            border-left: 3px solid #00a4e4;
+            padding-left: 10px;
+        }
+
+        #container { 
+            position: relative; 
+            display: inline-block; 
+            min-width: 800px; 
+            min-height: 600px; 
+            background: #ffffff; 
+            border: 2px dashed #00a4e4;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        }
+        .draggable { 
+            position: absolute; 
+            cursor: move; 
+            background: rgba(255,255,255,0.95); 
+            padding: 10px; 
+            border: 1px solid #ccc; 
+            box-shadow: 2px 2px 10px rgba(0,0,0,0.15); 
+            z-index: 10;
+            border-radius: 4px;
+        }
+        #mapImg { 
+            max-width: 100%; 
+            display: block; 
+            z-index: 1;
+        }
+        .lijn-dik { stroke: #000; stroke-width: 4; stroke-linecap: square; }
+        .lijn-dun { stroke: #000; stroke-width: 2; }
+        .lijn-stippel { stroke: #000; stroke-width: 2; stroke-dasharray: 6, 6; }
+        .leiding { fill: #1e90ff; stroke: #000; stroke-width: 2; }
+        .tekst-normaal { font-size: 14px; fill: #000; font-weight: 500; font-family: "Segoe UI", Arial, sans-serif; }
+        
+        .panel { 
+            background: #ffffff; 
+            padding: 20px; 
+            margin-bottom: 20px; 
+            border-radius: 8px; 
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border-top: 4px solid #1e3a8a;
+        }
+        
+        hr { border: 0; border-top: 1px solid #e2e8f0; margin: 15px 0; }
+        
+        .layer {
+            display: flex; gap: 10px; align-items: flex-start; margin-bottom: 10px; flex-wrap: wrap;
+            background: #f8fafc; padding: 10px; border: 1px solid #cbd5e1; border-radius: 4px;
+        }
+        .layer label, .layer > span { display: inline-flex; align-items: center; gap: 6px; padding-top: 6px; }
+        .layer .desc-wrap { flex: 1 1 320px; display: flex; flex-direction: column; gap: 4px; }
+        .layer .desc-wrap > span { font-size: 13px; color: #475569; }
+
+        input[type="number"], input[type="text"], input[type="file"], textarea {
+            padding: 6px;
+            border: 1px solid #cbd5e1;
+            border-radius: 4px;
+            font-family: "Segoe UI", Arial, sans-serif;
+            font-size: 14px;
+        }
+        textarea {
+            resize: vertical;
+            min-height: 46px;
+            line-height: 1.35;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        input[type="color"] {
+            border: none;
+            width: 30px;
+            height: 30px;
+            padding: 0;
+            background: transparent;
+            cursor: pointer;
+        }
+        
+        button {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: opacity 0.2s;
+        }
+        button:hover { opacity: 0.9; }
+        
+        .btn-add { background: #00a4e4; color: white; margin-bottom: 10px; }
+        .btn-remove { background: #ef4444; color: white; padding: 4px 8px; }
+        .btn-print { background: #10b981; color: white; padding: 10px 15px; }
+        .btn-export { background: #1e3a8a; color: white; padding: 10px 15px; }
+        
+        /* SVG Styles */
+        .lijn-dik { stroke: #000; stroke-width: 2px; }
+        .lijn-dun { stroke: #000; stroke-width: 1px; }
+        .lijn-stippel { stroke: #000; stroke-width: 1px; stroke-dasharray: 4,4; }
+        .tekst-normaal { font-family: 'Open Sans', Arial, sans-serif; font-size: 14px; fill: #000; }
+        
+        /* Handles */
+        .handle { position: absolute; border: 2px solid #fff; box-shadow: 0 0 3px #000; z-index: 20; border-radius: 50%; }
+        .resize-handle { right: -8px; bottom: -8px; width: 16px; height: 16px; background: #2196F3; cursor: nwse-resize; }
+
+        
+        .arrow-point-handle { width: 16px; height: 16px; background: white; border: 2px solid #ffb81c; border-radius: 50%; cursor: crosshair; transform: translate(-50%, -50%); z-index: 20; position: absolute; box-shadow: 0 0 3px rgba(0,0,0,0.5); }
+        .arrow-point-handle:hover { background: #ffb81c; }
+        
+        @media print {
+            .no-print { display: none !important; }
+            #container { border: none; background: transparent; }
+            .draggable { box-shadow: none; border: 1px solid #000; background: rgba(255,255,255,0.8); }
+        }
+    </style>
+</head>
+<body>
+
+<div class="no-print panel">
+    <div class="header-bar">
+        <div class="logo">
+            <span class="antea">antea</span><span class="group">group</span>
+            <span style="color: #ffb81c; font-size: 32px; line-height: 0; vertical-align: middle; margin-left: 2px;">■</span>
+        </div>
+        <h2>Dwarsprofiel Kaartgenerator</h2>
+    </div>
+    
+    <div>
+        <strong>1. Achtergrond Kaart:</strong>
+        <input type="file" id="upload" accept="image/*">
+    </div>
+    
+    <hr>
+
+    <strong>2. Profiel Lagen:</strong>
+    <div id="layers">
+        <!-- Start zonder lagen, de gebruiker kan ze toevoegen -->
+    </div>
+    <button onclick="addLayer()" class="btn-add">+ Laag Toevoegen</button>
+    <br>
+    
+    <div style="background:#f8fafc; border:1px solid #cbd5e1; border-radius:4px; padding:10px; margin:10px 0;">
+        <label><input type="checkbox" id="showDepots" onchange="renderProfile()"> <strong>Toon depots (grondhopen naast de sleuf)</strong></label>
+        <span style="margin-left:15px;">Basisbreedte: <input type="number" id="depotWidth" value="120" min="60" max="250" step="10" style="width:60px" onchange="renderProfile()"></span>
+        <span style="margin-left:10px;">Hoogte: <input type="number" id="depotHeight" value="80" min="40" max="200" step="10" style="width:60px" onchange="renderProfile()"></span>
+        <span style="margin-left:10px;">Standaardnaam: <input type="text" id="depotLabel" value="Depot" style="width:90px" onchange="renderProfile()"></span>
+        <div id="depotConfig" style="margin-top:10px;"></div>
+        <p style="color:#64748b; font-size:13px; margin:6px 0 0;"><em>Kies per laag (hierboven) in welk depot de grond terechtkomt. Meerdere lagen in hetzelfde depot worden als gemengde hoop getekend.</em></p>
+        <label style="display:inline-block; margin-top:8px;"><input type="checkbox" id="showDepotNote" checked onchange="renderProfile()"> Toelichting onder legenda (meerdere regels toegestaan):</label>
+        <textarea id="depotNote" rows="3" style="width:100%; margin-top:5px;" oninput="renderProfile()">De ontgraven grond wordt na het uitvoeren van de geplande werkzaamheden in hetzelfde grondprofiel teruggeplaatst.</textarea>
+    </div>
+
+    <label><input type="checkbox" id="showPipe" onchange="renderProfile()"> Toon leiding:</label>
+    <input type="text" id="pipeName" value="Waterleiding Vitens" style="width:150px" onchange="renderProfile()">
+    <span style="margin-left: 15px;">Kleur: <input type="color" id="pipeColor" value="#1e90ff" onchange="renderProfile()"></span>
+    <span style="margin-left: 15px;">Sleuf breedte (m): <input type="text" id="trenchWidth" value="1,0" style="width:50px" onchange="renderProfile()"></span>
+    
+    <hr>
+    
+    <strong>3. Weergave & Positie:</strong>
+    <p style="color: #64748b; font-size: 14px; margin-top: 5px;"><em>Tip: Je kunt de uiteinden van de rode pijl (oranje bolletjes) of het profiel slepen om ze precies goed te leggen!</em></p>
+    <div style="display:flex; gap: 20px; align-items: center; margin-top:10px;">
+        <label>Grootte Profiel: 
+            <input type="range" id="scaleProfile" min="0.3" max="2.0" step="0.05" value="0.5" oninput="updateScale()">
+        </label>
+        
+        <label>Dikte Pijl: 
+            <input type="range" id="thickArrow" min="2" max="20" step="1" value="5" oninput="updateArrowThickness()">
+        </label>
+        
+        <button onclick="downloadFullMap()" class="btn-print">Download Volledige Kaart (PNG)</button>
+        <button onclick="downloadProfilePNG()" class="btn-export">Download Los Profiel (PNG)</button>
+    </div>
+</div>
+
+<div id="container">
+    <img id="mapImg" src="" alt="Laad een kaart in via de knop bovenaan...">
+    
+    <div id="profiel" class="draggable" style="top: 20px; left: 20px; transform-origin: top left; transform: scale(0.5);">
+        <svg id="profielSvg" width="700" height="600" viewBox="0 0 700 600"></svg>
+    </div>
+
+    <!-- Pijl overlay -->
+    <svg id="overlaySvg" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; overflow: visible;">
+        <defs>
+            <marker id="arrowhead-main" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                <polygon points="0 0, 10 5, 0 10" fill="red" />
+            </marker>
+        </defs>
+        <line id="arrowLine" x1="700" y1="200" x2="600" y2="100" stroke="red" stroke-width="5" marker-end="url(#arrowhead-main)" style="pointer-events: stroke; cursor: move;" />
+    </svg>
+    
+    <div id="arrowStart" class="arrow-point-handle no-print" style="left: 700px; top: 200px;"></div>
+    <div id="arrowEnd" class="arrow-point-handle no-print" style="left: 600px; top: 100px;"></div>
+</div>
+
+<script>
+// --- DRAG LOGIC ---
+function makeDraggable(elm) {
+    let isDown = false, startX, startY, elmX, elmY;
+    elm.onmousedown = function(e) {
+        if(e.target.className && typeof e.target.className === 'string' && e.target.className.includes('handle')) return; 
+        if(e.target.tagName && (e.target.tagName.toLowerCase() === 'input' || e.target.tagName.toLowerCase() === 'button')) return;
+        isDown = true;
+        startX = e.clientX; startY = e.clientY;
+        elmX = elm.offsetLeft; elmY = elm.offsetTop;
+        document.body.style.userSelect = 'none';
+        e.preventDefault();
+    }
+    document.addEventListener('mousemove', function(e) {
+        if(!isDown) return;
+        elm.style.left = (elmX + e.clientX - startX) + 'px';
+        elm.style.top = (elmY + e.clientY - startY) + 'px';
+    });
+    document.addEventListener('mouseup', () => {
+        isDown = false;
+        document.body.style.userSelect = '';
+    });
+}
+
+let profiel = document.getElementById('profiel');
+makeDraggable(profiel);
+
+// --- HANDLES VOOR RESIZE PROFIEL ---
+let resizeHandle = document.createElement('div');
+resizeHandle.className = 'handle resize-handle no-print';
+profiel.appendChild(resizeHandle);
+
+let isResizing = false;
+let startScale = 0.5;
+let startMouseX;
+
+resizeHandle.onmousedown = function(e) {
+    isResizing = true;
+    startMouseX = e.clientX;
+    startScale = parseFloat(document.getElementById('scaleProfile').value);
+    document.body.style.userSelect = 'none';
+    e.stopPropagation();
+    e.preventDefault();
+}
+document.addEventListener('mousemove', function(e) {
+    if(isResizing) {
+        let dx = e.clientX - startMouseX;
+        let newScale = startScale + (dx * 0.005);
+        if(newScale < 0.2) newScale = 0.2;
+        if(newScale > 3) newScale = 3;
+        document.getElementById('scaleProfile').value = newScale;
+        updateScale();
+    }
+});
+document.addEventListener('mouseup', () => {
+    isResizing = false;
+    document.body.style.userSelect = '';
+});
+
+// --- ARROW LOGIC (Twee Punten) ---
+let arrowLine = document.getElementById('arrowLine');
+let arrowStart = document.getElementById('arrowStart');
+let arrowEnd = document.getElementById('arrowEnd');
+let container = document.getElementById('container');
+
+let activeArrowDrag = null; // 'start', 'end', or 'line'
+let arrStartX, arrStartY;
+let lineX1 = 700, lineY1 = 200, lineX2 = 600, lineY2 = 100;
+
+function getEventOffset(e) {
+    let rect = container.getBoundingClientRect();
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+}
+
+function updateArrowView() {
+    arrowLine.setAttribute('x1', lineX1);
+    arrowLine.setAttribute('y1', lineY1);
+    arrowLine.setAttribute('x2', lineX2);
+    arrowLine.setAttribute('y2', lineY2);
+    arrowStart.style.left = lineX1 + 'px';
+    arrowStart.style.top = lineY1 + 'px';
+    arrowEnd.style.left = lineX2 + 'px';
+    arrowEnd.style.top = lineY2 + 'px';
+}
+
+arrowStart.onmousedown = function(e) {
+    activeArrowDrag = 'start';
+    document.body.style.userSelect = 'none';
+    e.stopPropagation(); e.preventDefault();
+};
+
+arrowEnd.onmousedown = function(e) {
+    activeArrowDrag = 'end';
+    document.body.style.userSelect = 'none';
+    e.stopPropagation(); e.preventDefault();
+};
+
+arrowLine.onmousedown = function(e) {
+    activeArrowDrag = 'line';
+    let pos = getEventOffset(e);
+    arrStartX = pos.x;
+    arrStartY = pos.y;
+    document.body.style.userSelect = 'none';
+    e.stopPropagation(); e.preventDefault();
+};
+
+document.addEventListener('mousemove', function(e) {
+    if(!activeArrowDrag) return;
+    let pos = getEventOffset(e);
+    
+    if (activeArrowDrag === 'start') {
+        lineX1 = pos.x; lineY1 = pos.y;
+    } else if (activeArrowDrag === 'end') {
+        lineX2 = pos.x; lineY2 = pos.y;
+    } else if (activeArrowDrag === 'line') {
+        let dx = pos.x - arrStartX;
+        let dy = pos.y - arrStartY;
+        lineX1 += dx; lineY1 += dy;
+        lineX2 += dx; lineY2 += dy;
+        arrStartX = pos.x; arrStartY = pos.y;
+    }
+    updateArrowView();
+});
+
+document.addEventListener('mouseup', function(e) {
+    if (activeArrowDrag) {
+        activeArrowDrag = null;
+        document.body.style.userSelect = '';
+    }
+});
+
+function updateArrowThickness() {
+    arrowLine.setAttribute('stroke-width', document.getElementById('thickArrow').value);
+}
+
+// --- FILE UPLOAD ---
+document.getElementById('upload').onchange = function(e) {
+    if(e.target.files && e.target.files[0]) {
+        let reader = new FileReader();
+        reader.onload = function(event) {
+            document.getElementById('mapImg').src = event.target.result;
+        }
+        reader.readAsDataURL(e.target.files[0]);
+    }
+}
+
+function updateScale() {
+    document.getElementById('profiel').style.transform = `scale(${document.getElementById('scaleProfile').value})`;
+}
+
+function addLayer() {
+    let layers = document.querySelectorAll('.layer');
+    let startTop = 0.0;
+    if (layers.length > 0) {
+        let lastLayer = layers[layers.length - 1];
+        let lastBot = parseFloat(lastLayer.querySelector('.bot').value);
+        if (!isNaN(lastBot)) startTop = lastBot;
+    }
+    let defaultBot = (startTop + 0.5).toFixed(1);
+
+    let nextDepot = Math.min(layers.length + 1, 6);
+    let depotOptions = '<option value="0">Geen</option>';
+    for (let n = 1; n <= 6; n++) {
+        depotOptions += `<option value="${n}" ${n === nextDepot ? 'selected' : ''}>Depot ${n}</option>`;
+    }
+
+    let div = document.createElement('div');
+    div.className = 'layer';
+    div.innerHTML = `
+        <span>Van (m): <input type="number" step="0.1" value="${startTop}" class="top" style="width: 60px;" onchange="renderProfile()"></span>
+        <span>Tot (m): <input type="number" step="0.1" value="${defaultBot}" class="bot" style="width: 60px;" onchange="renderProfile()"></span>
+        <span>Kleur: <input type="color" value="#ffeb3b" class="col" onchange="renderProfile()"></span>
+        <span>Naar: <select class="depot" onchange="renderProfile()">${depotOptions}</select></span>
+        <div class="desc-wrap">
+            <span>Omschrijving (meerdere regels toegestaan):</span>
+            <textarea class="desc" rows="2" oninput="renderProfile()">Nieuwe laag</textarea>
+        </div>
+        <button onclick="this.parentNode.remove(); renderProfile();" class="btn-remove">X</button>
+    `;
+    document.getElementById('layers').appendChild(div);
+    renderProfile();
+}
+
+// --- DEPOT INSTELLINGEN (naam + kant per depot) ---
+let depotSettings = {};
+
+function getDepotSetting(nr) {
+    if (!depotSettings[nr]) {
+        depotSettings[nr] = { name: '', side: (nr % 2 === 1) ? 'rechts' : 'links' };
+    }
+    return depotSettings[nr];
+}
+
+function setDepotSetting(nr, key, value) {
+    getDepotSetting(nr)[key] = value;
+    renderProfile();
+}
+
+function syncDepotConfig(usedNrs) {
+    let box = document.getElementById('depotConfig');
+    let current = [...box.querySelectorAll('.depot-cfg')].map(d => d.dataset.nr).join(',');
+    if (current === usedNrs.join(',')) return;
+    box.innerHTML = usedNrs.map(nr => {
+        let s = getDepotSetting(nr);
+        return `<div class="depot-cfg" data-nr="${nr}" style="display:flex; gap:10px; align-items:center; margin-bottom:6px;">
+            <strong style="min-width:70px;">Depot ${nr}</strong>
+            <span>Naam: <input type="text" value="${escAttr(s.name)}" placeholder="(standaardnaam)" style="width:200px"
+                onchange="setDepotSetting(${nr}, 'name', this.value)"></span>
+            <span>Kant: <select onchange="setDepotSetting(${nr}, 'side', this.value)">
+                <option value="rechts" ${s.side === 'rechts' ? 'selected' : ''}>Rechts</option>
+                <option value="links" ${s.side === 'links' ? 'selected' : ''}>Links</option>
+            </select></span>
+        </div>`;
+    }).join('') || '<em style="color:#64748b; font-size:13px;">Nog geen lagen aan een depot toegewezen.</em>';
+}
+
+function escAttr(s) {
+    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+}
+
+// Driehoek met gestapelde banden (per laag) — punt boven, basis op maaiveld
+function depotTriangleSvg(x0, yBase, w, h, bands) {
+    let apexX = x0 + w / 2;
+    let out = '';
+    let f = 0;
+    bands.forEach(b => {
+        let f1 = f, f2 = Math.min(1, f + b.frac);
+        f = f2;
+        let y1 = yBase - h + f1 * h, y2 = yBase - h + f2 * h;
+        let hw1 = (w / 2) * f1, hw2 = (w / 2) * f2;
+        out += `<polygon points="${apexX - hw1},${y1} ${apexX + hw1},${y1} ${apexX + hw2},${y2} ${apexX - hw2},${y2}" fill="${b.color}" stroke="none" />`;
+    });
+    out += `<polygon points="${x0},${yBase} ${apexX},${yBase - h} ${x0 + w},${yBase}" fill="none" stroke="#000" stroke-width="2" stroke-linejoin="round" />`;
+    return out;
+}
+
+function renderProfile() {
+    let layers = [...document.querySelectorAll('.layer')].map(row => {
+       return {
+           top: parseFloat(row.querySelector('.top').value),
+           bottom: parseFloat(row.querySelector('.bot').value),
+           color: row.querySelector('.col').value,
+           desc: row.querySelector('.desc').value,
+           depot: parseInt(row.querySelector('.depot') ? row.querySelector('.depot').value : '0', 10)
+       };
+    });
+    
+    let maxDepth = Math.max(...layers.map(l => l.bottom));
+    if (isNaN(maxDepth) || maxDepth <= 0) maxDepth = 1.0;
+    
+    let pxPerMeter = 240 / maxDepth;
+    
+    let svg = `<defs>
+                <style>
+                    .lijn-dik { stroke: #000; stroke-width: 2px; }
+                    .lijn-dun { stroke: #000; stroke-width: 1px; }
+                    .lijn-stippel { stroke: #000; stroke-width: 1px; stroke-dasharray: 4,4; }
+                    .tekst-normaal { font-family: 'Open Sans', Arial, sans-serif; font-size: 14px; fill: #000; }
+                </style>
+                <marker id="arrow-left" markerWidth="10" markerHeight="10" refX="0" refY="5" orient="auto-start-reverse">
+                    <path d="M 10 0 L 0 5 L 10 10 z" fill="#000" />
+                </marker>
+                <marker id="arrow-right" markerWidth="10" markerHeight="10" refX="10" refY="5" orient="auto">
+                    <path d="M 0 0 L 10 5 L 0 10 z" fill="#000" />
+                </marker>
+            </defs>`;
+            
+    let depotW = parseFloat(document.getElementById('depotWidth').value) || 120;
+    let depotH = parseFloat(document.getElementById('depotHeight').value) || 80;
+    let depotLabel = document.getElementById('depotLabel').value || 'Depot';
+    let depotGap = 15;
+
+    // --- Depots samenstellen op basis van de laag-toewijzing ---
+    let groups = {};
+    layers.forEach(l => {
+        if (!l.depot || isNaN(l.depot)) return;
+        if (!groups[l.depot]) groups[l.depot] = [];
+        groups[l.depot].push(l);
+    });
+    let usedNrs = Object.keys(groups).map(Number).sort((a, b) => a - b);
+    syncDepotConfig(usedNrs);
+
+    let showDepots = document.getElementById('showDepots').checked && usedNrs.length > 0;
+
+    let yStart = showDepots ? (depotH + 40) : 60;
+    let xLeft = 250;
+    let xRight = 450;
+    let tWidth = xRight - xLeft;
+
+    // --- Depot posities bepalen (per gekozen kant, van de sleuf naar buiten) ---
+    let depots = [];
+    if (showDepots) {
+        let rightCount = 0, leftCount = 0;
+        usedNrs.forEach(nr => {
+            let s = getDepotSetting(nr);
+            let x0;
+            if (s.side === 'links') {
+                x0 = xLeft - depotGap - depotW - leftCount * (depotW + depotGap);
+                leftCount++;
+            } else {
+                x0 = xRight + depotGap + rightCount * (depotW + depotGap);
+                rightCount++;
+            }
+            let gl = groups[nr];
+            let totalT = gl.reduce((s2, l) => s2 + Math.max(0, (l.bottom - l.top)), 0);
+            let bands = gl.map(l => ({
+                color: l.color,
+                frac: totalT > 0 ? Math.max(0, (l.bottom - l.top)) / totalT : 1 / gl.length
+            }));
+            depots.push({
+                x0: x0,
+                nr: nr,
+                bands: bands,
+                layers: gl,
+                name: (s.name && s.name.trim()) ? s.name.trim() : `${depotLabel} ${nr}`
+            });
+        });
+    }
+
+    // Uiteinden van de maaiveldlijn: altijd genoeg ruimte voor de depots
+    let mvLeftEnd = xLeft - 100;
+    let mvRightEnd = xRight + 100;
+    depots.forEach(d => {
+        mvLeftEnd = Math.min(mvLeftEnd, d.x0 - depotGap);
+        mvRightEnd = Math.max(mvRightEnd, d.x0 + depotW + depotGap);
+    });
+    let labelX = mvRightEnd + 10;
+
+    // Lagen
+    layers.forEach(l => {
+        let h = (l.bottom - l.top) * pxPerMeter;
+        let y = yStart + (l.top * pxPerMeter);
+        svg += `<rect x="${xLeft}" y="${y}" width="${tWidth}" height="${h}" fill="${l.color}" />`;
+    });
+
+    let totalH = maxDepth * pxPerMeter;
+
+    // Depots (driehoeken op maaiveld)
+    depots.forEach(d => {
+        svg += depotTriangleSvg(d.x0, yStart, depotW, depotH, d.bands);
+    });
+
+    // Grenzen
+    svg += `<line x1="${mvLeftEnd}" y1="${yStart}" x2="${xLeft}" y2="${yStart}" class="lijn-dik" />`;
+    svg += `<line x1="${xRight}" y1="${yStart}" x2="${mvRightEnd}" y2="${yStart}" class="lijn-dik" />`;
+    svg += `<text x="${labelX}" y="${yStart+5}" class="tekst-normaal">mv.</text>`;
+
+    svg += `<line x1="${xLeft}" y1="${yStart}" x2="${xLeft}" y2="${yStart+totalH}" class="lijn-dik" />`;
+    svg += `<line x1="${xRight}" y1="${yStart}" x2="${xRight}" y2="${yStart+totalH}" class="lijn-dik" />`;
+    svg += `<line x1="${xLeft}" y1="${yStart+totalH}" x2="${xRight}" y2="${yStart+totalH}" class="lijn-dik" />`;
+
+    // Diepte aanduidingen
+    layers.forEach(l => {
+        let y = yStart + (l.bottom * pxPerMeter);
+        svg += `<line x1="${xLeft}" y1="${y}" x2="${xRight}" y2="${y}" class="lijn-dun" />`;
+        svg += `<line x1="${xRight}" y1="${y}" x2="${mvRightEnd}" y2="${y}" class="lijn-stippel" />`;
+        svg += `<text x="${labelX}" y="${y+5}" class="tekst-normaal">${l.bottom.toFixed(1).replace('.',',')} m- mv.</text>`;
+    });
+
+    // Breedte
+    let wY = yStart + totalH + 40;
+    svg += `<line x1="${xLeft}" y1="${wY-30}" x2="${xLeft}" y2="${wY}" class="lijn-dik" />`;
+    svg += `<line x1="${xRight}" y1="${wY-30}" x2="${xRight}" y2="${wY}" class="lijn-dik" />`;
+    svg += `<line x1="${xLeft+5}" y1="${wY-15}" x2="${xLeft+65}" y2="${wY-15}" class="lijn-stippel" marker-start="url(#arrow-left)" />`;
+    svg += `<line x1="${xRight-65}" y1="${wY-15}" x2="${xRight-5}" y2="${wY-15}" class="lijn-stippel" marker-end="url(#arrow-right)" />`;
+    svg += `<text x="350" y="${wY-10}" text-anchor="middle" class="tekst-normaal">${document.getElementById('trenchWidth').value} m</text>`;
+    
+    // Pipe
+    if(document.getElementById('showPipe').checked) {
+        let pColor = document.getElementById('pipeColor').value;
+        svg += `<circle cx="350" cy="${yStart+totalH - 20}" r="15" stroke="#000" stroke-width="2" fill="${pColor}" />`;
+    }
+    
+    // Tekenvlak bepalen
+    let minX = Math.min(150, mvLeftEnd - 20);
+    let maxX = labelX + 150;
+    let legendX = minX + 20;
+    let textX = legendX + 50;
+
+    // Legenda
+    let legY = wY + 30;
+    let legMaxChars = Math.max(30, Math.floor((maxX - textX - 20) / 7.4));
+
+    function legendEntry(iconSvg, text) {
+        svg += iconSvg;
+        let lines = wrapText(text, legMaxChars);
+        lines.forEach((line, k) => {
+            svg += `<text x="${textX}" y="${legY + 15 + k * 20}" class="tekst-normaal">${escXml(line)}</text>`;
+        });
+        legY += Math.max(30, lines.length * 20 + 10);
+    }
+
+    layers.forEach((l, i) => {
+        legendEntry(
+            `<rect x="${legendX}" y="${legY}" width="40" height="20" fill="${l.color}" stroke="#000" stroke-width="2" />`,
+            `Laag ${i+1} (${l.top.toFixed(1).replace('.',',')} - ${l.bottom.toFixed(1).replace('.',',')} m): ${l.desc}`
+        );
+    });
+
+    // Legenda depots
+    if (showDepots) {
+        depots.forEach(d => {
+            let inhoud = d.layers.map(l => `${l.desc} (${l.top.toFixed(1).replace('.',',')} - ${l.bottom.toFixed(1).replace('.',',')} m)`).join(' + ');
+            legendEntry(
+                depotTriangleSvg(legendX, legY + 22, 40, 26, d.bands),
+                `${d.name}: ${inhoud}`
+            );
+        });
+    }
+
+    if(document.getElementById('showPipe').checked) {
+        let pColor = document.getElementById('pipeColor').value;
+        let pName = document.getElementById('pipeName').value;
+        legendEntry(
+            `<circle cx="${legendX+20}" cy="${legY+10}" r="10" stroke="#000" stroke-width="2" fill="${pColor}" />`,
+            pName
+        );
+    }
+
+    // Toelichting onder de legenda
+    if (showDepots && document.getElementById('showDepotNote').checked) {
+        let note = document.getElementById('depotNote').value.trim();
+        if (note) {
+            legY += 10;
+            let maxChars = Math.max(30, Math.floor((maxX - minX - 40) / 7.4));
+            wrapText(note, maxChars).forEach(line => {
+                svg += `<text x="${legendX}" y="${legY+15}" class="tekst-normaal">${escXml(line)}</text>`;
+                legY += 22;
+            });
+        }
+    }
+
+    let totalWidth = maxX - minX;
+    let totalHeight = legY + 20;
+
+    let containerSvg = document.getElementById('profielSvg');
+    containerSvg.innerHTML = svg;
+    containerSvg.setAttribute('width', totalWidth);
+    containerSvg.setAttribute('height', totalHeight);
+    containerSvg.setAttribute('viewBox', `${minX} 0 ${totalWidth} ${totalHeight}`);
+}
+
+function escXml(s) {
+    return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+}
+
+function wrapText(text, maxChars) {
+    let lines = [];
+    String(text == null ? '' : text).split(/\r?\n/).forEach(para => {
+        let words = para.trim().split(/\s+/).filter(w => w.length);
+        if (!words.length) { lines.push(''); return; }
+        let cur = '';
+        words.forEach(w => {
+            if (cur.length === 0) { cur = w; }
+            else if ((cur + ' ' + w).length <= maxChars) { cur += ' ' + w; }
+            else { lines.push(cur); cur = w; }
+        });
+        if (cur.length) lines.push(cur);
+    });
+    return lines.length ? lines : [''];
+}
+
+// init
+renderProfile();
+
+function downloadFullMap() {
+    let container = document.getElementById('container');
+    let mapImg = document.getElementById('mapImg');
+    
+    if(!mapImg.src || mapImg.src === window.location.href) {
+        alert("Laad eerst een kaart in!");
+        return;
+    }
+    
+    let canvas = document.createElement('canvas');
+    canvas.width = container.offsetWidth;
+    canvas.height = container.offsetHeight;
+    let ctx = canvas.getContext('2d');
+    
+    // Draw Map Image
+    ctx.drawImage(mapImg, 0, 0, canvas.width, canvas.height);
+    
+    // Draw Arrow Overlay SVG
+    let overlaySvg = document.getElementById('overlaySvg');
+    let serializer = new XMLSerializer();
+    let overlaySource = serializer.serializeToString(overlaySvg);
+    if(!overlaySource.match(/^<svg[^>]+xmlns="http\:\/\/www\.w3\.org\/2000\/svg"/)){
+        overlaySource = overlaySource.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');
+    }
+    // Force explicit dimensions so the SVG rasters correctly
+    overlaySource = overlaySource.replace(/^<svg/, `<svg width="${canvas.width}" height="${canvas.height}"`);
+    
+    let overlayImg = new Image();
+    overlayImg.onload = function() {
+        ctx.drawImage(overlayImg, 0, 0, canvas.width, canvas.height);
+        
+        // Draw Profile SVG
+        let profiel = document.getElementById('profiel');
+        let profielSvg = document.getElementById('profielSvg');
+        let pSource = serializer.serializeToString(profielSvg);
+        if(!pSource.match(/^<svg[^>]+xmlns="http\:\/\/www\.w3\.org\/2000\/svg"/)){
+            pSource = pSource.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');
+        }
+        
+        let pImg = new Image();
+        pImg.onload = function() {
+            let pLeft = profiel.offsetLeft;
+            let pTop = profiel.offsetTop;
+            let scale = parseFloat(document.getElementById('scaleProfile').value);
+            let pWidth = profiel.offsetWidth * scale;
+            let pHeight = profiel.offsetHeight * scale;
+            
+            // Draw white background for the profile
+            ctx.fillStyle = "rgba(255,255,255,0.95)";
+            ctx.fillRect(pLeft, pTop, pWidth, pHeight);
+            ctx.strokeStyle = "black";
+            ctx.lineWidth = 1;
+            ctx.strokeRect(pLeft, pTop, pWidth, pHeight);
+            
+            // Draw the profile SVG onto canvas
+            ctx.drawImage(pImg, pLeft, pTop, pWidth, pHeight);
+            
+            // Download as PNG
+            let finalURL = canvas.toDataURL("image/png");
+            let dlLink = document.createElement('a');
+            dlLink.download = "Antea_Volledige_Kaart.png";
+            dlLink.href = finalURL;
+            document.body.appendChild(dlLink);
+            dlLink.click();
+            document.body.removeChild(dlLink);
+        };
+        pImg.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(pSource);
+    };
+    overlayImg.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(overlaySource);
+}
+
+function downloadProfilePNG() {
+    let svg = document.getElementById('profielSvg');
+    let serializer = new XMLSerializer();
+    let source = serializer.serializeToString(svg);
+    
+    if(!source.match(/^<svg[^>]+xmlns="http\:\/\/www\.w3\.org\/2000\/svg"/)){
+        source = source.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');
+    }
+    
+    source = source.replace(/^<svg/, '<svg style="background-color: white;" ');
+
+    let svgData = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(source);
+    
+    let canvas = document.createElement("canvas");
+    canvas.width = svg.width.baseVal.value;
+    canvas.height = svg.height.baseVal.value;
+    let ctx = canvas.getContext("2d");
+    
+    let img = new Image();
+    img.onload = function() {
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0);
+        
+        let imgURL = canvas.toDataURL("image/png");
+        let dlLink = document.createElement('a');
+        dlLink.download = "Antea_Dwarsprofiel.png";
+        dlLink.href = imgURL;
+        document.body.appendChild(dlLink);
+        dlLink.click();
+        document.body.removeChild(dlLink);
+    };
+    img.src = svgData;
+}
+</script>
+</body>
+</html>

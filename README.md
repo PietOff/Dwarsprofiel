@@ -22,6 +22,8 @@ blijven volledig lokaal op je eigen computer.
   (of "Geen" als de laag niet wordt ontgraven). Elk depot wordt als driehoekige grondhoop naast
   de sleuf getekend, links of rechts, met een eigen naam. Meerdere lagen in één depot worden als
   gemengde hoop met gestapelde kleurbanden weergegeven; een leeg depot wordt niet getekend.
+  Elke hoop krijgt een genummerde badge (1 of 2) die ook in de legenda staat, zodat twee depots
+  met dezelfde kleur uit elkaar te houden zijn.
 - **Leiding** in de sleuf tekenen met eigen kleur en naam.
 - **Rode locatiepijl** over de kaart, met versleepbare uiteinden en instelbare dikte.
 - **Toelichting** onder de legenda (standaard: de grond wordt na afloop in hetzelfde grondprofiel teruggeplaatst).

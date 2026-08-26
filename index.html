@@ -182,6 +182,7 @@
         <span style="margin-left:15px;">Basisbreedte: <input type="number" id="depotWidth" value="120" min="60" max="250" step="10" style="width:60px" onchange="renderProfile()"></span>
         <span style="margin-left:10px;">Hoogte: <input type="number" id="depotHeight" value="80" min="40" max="200" step="10" style="width:60px" onchange="renderProfile()"></span>
         <span style="margin-left:10px;">Standaardnaam: <input type="text" id="depotLabel" value="Depot" style="width:90px" onchange="renderProfile()"></span>
+        <label style="margin-left:10px;"><input type="checkbox" id="showDepotNumbers" checked onchange="renderProfile()"> Nummers in de hopen</label>
         <div id="depotConfig" style="margin-top:10px;"></div>
         <p style="color:#64748b; font-size:13px; margin:6px 0 0;"><em>Er zijn twee depots. Kies per laag (hierboven) in welk depot de grond terechtkomt; meerdere lagen in hetzelfde depot worden als gemengde hoop getekend. Een depot zonder lagen wordt niet getekend.</em></p>
         <label style="display:inline-block; margin-top:8px;"><input type="checkbox" id="showDepotNote" checked onchange="renderProfile()"> Toelichting onder legenda (meerdere regels toegestaan):</label>
@@ -578,7 +579,7 @@ function escAttr(s) {
 }
 
 // Driehoek met gestapelde banden (per laag) — punt boven, basis op maaiveld
-function depotTriangleSvg(x0, yBase, w, h, bands) {
+function depotTriangleSvg(x0, yBase, w, h, bands, badgeNr) {
     let apexX = x0 + w / 2;
     let out = '';
     let f = 0;
@@ -590,6 +591,15 @@ function depotTriangleSvg(x0, yBase, w, h, bands) {
         out += `<polygon points="${apexX - hw1},${y1} ${apexX + hw1},${y1} ${apexX + hw2},${y2} ${apexX - hw2},${y2}" fill="${b.color}" stroke="none" />`;
     });
     out += `<polygon points="${x0},${yBase} ${apexX},${yBase - h} ${x0 + w},${yBase}" fill="none" stroke="#000" stroke-width="2" stroke-linejoin="round" />`;
+
+    // Nummer-badge, zodat twee depots met dezelfde kleur uit elkaar te houden zijn
+    if (badgeNr) {
+        let r = Math.max(7, Math.min(15, w / 6));
+        let cy = yBase - h * 0.33;
+        out += `<circle cx="${apexX}" cy="${cy}" r="${r}" fill="#ffffff" stroke="#000" stroke-width="2" />`;
+        out += `<text x="${apexX}" y="${cy + r * 0.36}" text-anchor="middle" `
+            + `style="font-family:'Open Sans', Arial, sans-serif; font-size:${(r * 1.35).toFixed(1)}px; font-weight:700; fill:#000;">${badgeNr}</text>`;
+    }
     return out;
 }
 
@@ -671,7 +681,7 @@ function renderProfile() {
                 nr: nr,
                 bands: bands,
                 layers: gl,
-                name: (s.name && s.name.trim()) ? s.name.trim() : `${depotLabel} ${nr}`
+                name: (s.name && s.name.trim()) ? `${nr}. ${s.name.trim()}` : `${depotLabel} ${nr}`
             });
         });
     }
@@ -695,8 +705,9 @@ function renderProfile() {
     let totalH = maxDepth * pxPerMeter;
 
     // Depots (driehoeken op maaiveld)
+    let showDepotNrs = document.getElementById('showDepotNumbers').checked;
     depots.forEach(d => {
-        svg += depotTriangleSvg(d.x0, yStart, depotW, depotH, d.bands);
+        svg += depotTriangleSvg(d.x0, yStart, depotW, depotH, d.bands, showDepotNrs ? d.nr : null);
     });
 
     // Grenzen
@@ -761,7 +772,7 @@ function renderProfile() {
         depots.forEach(d => {
             let inhoud = d.layers.map(l => `${l.desc} (${l.top.toFixed(1).replace('.',',')} - ${l.bottom.toFixed(1).replace('.',',')} m)`).join(' + ');
             legendEntry(
-                depotTriangleSvg(legendX, legY + 22, 40, 26, d.bands),
+                depotTriangleSvg(legendX, legY + 22, 40, 26, d.bands, showDepotNrs ? d.nr : null),
                 `${d.name}: ${inhoud}`
             );
         });

@@ -10,7 +10,13 @@ blijven volledig lokaal op je eigen computer.
 
 ## Wat kan je ermee
 
-- **Achtergrondkaart** inladen (PNG/JPG, bijvoorbeeld een uitsnede uit GIS) en het profiel eroverheen slepen en schalen.
+- **Achtergrondkaart** inladen als **PNG, JPG of PDF** (bijvoorbeeld een uitsnede uit GIS of een
+  tekening-PDF) en het profiel eroverheen slepen en schalen. Bij een PDF met meerdere pagina's
+  kies je welke pagina je gebruikt.
+
+  > De PDF-lezer (pdf.js) wordt eerst naast `index.html` gezocht en anders van cdnjs gehaald.
+  > Blokkeert je netwerk cdnjs, zet dan `pdf.min.js` en `pdf.worker.min.js` (pdf.js 3.11.174)
+  > naast `index.html`; ze worden dan automatisch gebruikt. PNG/JPG werkt altijd zonder internet.
 - **Bodemlagen** toevoegen met diepte van/tot, kleur en een omschrijving over meerdere regels.
 - **Depots**: er zijn twee depots. Kies per laag naar welk depot de ontgraven grond gaat
   (of "Geen" als de laag niet wordt ontgraven). Elk depot wordt als driehoekige grondhoop naast

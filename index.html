@@ -159,7 +159,13 @@
     
     <div>
         <strong>1. Achtergrond Kaart:</strong>
-        <input type="file" id="upload" accept="image/*">
+        <input type="file" id="upload" accept="image/*,application/pdf,.pdf">
+        <span id="pdfPager" style="display:none; margin-left:10px;">
+            Pagina: <input type="number" id="pdfPage" value="1" min="1" step="1" style="width:60px" onchange="applyPdfPage()">
+            van <span id="pdfPageCount">1</span>
+        </span>
+        <span id="mapStatus" style="margin-left:10px; color:#64748b; font-size:13px;"></span>
+        <p style="color:#64748b; font-size:13px; margin:6px 0 0;"><em>PNG, JPG of PDF. Bij een PDF wordt de gekozen pagina als afbeelding ingeladen (internetverbinding nodig voor de pdf-lezer).</em></p>
     </div>
     
     <hr>
@@ -374,15 +380,115 @@ function updateArrowThickness() {
     arrowLine.setAttribute('stroke-width', document.getElementById('thickArrow').value);
 }
 
-// --- FILE UPLOAD ---
-document.getElementById('upload').onchange = function(e) {
-    if(e.target.files && e.target.files[0]) {
-        let reader = new FileReader();
-        reader.onload = function(event) {
-            document.getElementById('mapImg').src = event.target.result;
-        }
-        reader.readAsDataURL(e.target.files[0]);
+// --- FILE UPLOAD (afbeelding of PDF) ---
+const PDFJS_VERSION = '3.11.174';
+let pdfDoc = null;
+let pdfLibPromise = null;
+
+function setMapStatus(txt) {
+    document.getElementById('mapStatus').textContent = txt || '';
+}
+
+// pdf.js wordt eerst naast dit bestand gezocht (pdf.min.js + pdf.worker.min.js),
+// en anders van het CDN gehaald. Zo werkt het ook op netwerken die CDN's blokkeren.
+const PDFJS_SOURCES = [
+    { js: 'pdf.min.js', worker: 'pdf.worker.min.js' },
+    { js: `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VERSION}/pdf.min.js`,
+      worker: `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VERSION}/pdf.worker.min.js` }
+];
+
+function loadScript(url) {
+    return new Promise(function(resolve, reject) {
+        let el = document.createElement('script');
+        el.src = url;
+        el.onload = resolve;
+        el.onerror = function() { el.remove(); reject(new Error('kan niet laden: ' + url)); };
+        document.head.appendChild(el);
+    });
+}
+
+function loadPdfLib() {
+    if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+    if (!pdfLibPromise) {
+        pdfLibPromise = (async function() {
+            for (let src of PDFJS_SOURCES) {
+                try {
+                    await loadScript(src.js);
+                    if (!window.pdfjsLib) continue;
+                    window.pdfjsLib.GlobalWorkerOptions.workerSrc = src.worker;
+                    return window.pdfjsLib;
+                } catch (e) { /* volgende bron proberen */ }
+            }
+            pdfLibPromise = null;
+            throw new Error('De pdf-lezer (pdf.js) kon niet geladen worden.');
+        })();
     }
+    return pdfLibPromise;
+}
+
+document.getElementById('upload').onchange = async function(e) {
+    let file = e.target.files && e.target.files[0];
+    if (!file) return;
+
+    let isPdf = (file.type === 'application/pdf') || /\.pdf$/i.test(file.name);
+
+    if (!isPdf) {
+        pdfDoc = null;
+        document.getElementById('pdfPager').style.display = 'none';
+        setMapStatus('');
+        let reader = new FileReader();
+        reader.onload = function(ev) { document.getElementById('mapImg').src = ev.target.result; };
+        reader.readAsDataURL(file);
+        return;
+    }
+
+    setMapStatus('PDF wordt geladen...');
+    try {
+        let lib = await loadPdfLib();
+        let buf = await file.arrayBuffer();
+        pdfDoc = await lib.getDocument({ data: buf }).promise;
+        document.getElementById('pdfPageCount').textContent = pdfDoc.numPages;
+        let pageInput = document.getElementById('pdfPage');
+        pageInput.max = pdfDoc.numPages;
+        pageInput.value = 1;
+        document.getElementById('pdfPager').style.display = pdfDoc.numPages > 1 ? '' : 'none';
+        await renderPdfPage(1);
+    } catch (err) {
+        pdfDoc = null;
+        document.getElementById('pdfPager').style.display = 'none';
+        setMapStatus('');
+        alert('Deze PDF kon niet worden ingeladen.\n\n' + (err && err.message ? err.message : err) +
+              '\n\nDe pdf-lezer wordt van internet geladen; werk je offline, exporteer de kaart dan eerst als PNG of JPG.');
+    }
+};
+
+async function applyPdfPage() {
+    if (!pdfDoc) return;
+    let n = parseInt(document.getElementById('pdfPage').value, 10);
+    if (isNaN(n) || n < 1) n = 1;
+    if (n > pdfDoc.numPages) n = pdfDoc.numPages;
+    document.getElementById('pdfPage').value = n;
+    await renderPdfPage(n);
+}
+
+async function renderPdfPage(n) {
+    setMapStatus('Pagina ' + n + ' wordt gerenderd...');
+    let page = await pdfDoc.getPage(n);
+    let base = page.getViewport({ scale: 1 });
+    // richt op ca. 1800 px breed, zodat de kaart scherp blijft in de export
+    let scale = Math.min(4, Math.max(1, 1800 / base.width));
+    let vp = page.getViewport({ scale: scale });
+
+    let canvas = document.createElement('canvas');
+    canvas.width = Math.round(vp.width);
+    canvas.height = Math.round(vp.height);
+    let ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    await page.render({ canvasContext: ctx, viewport: vp }).promise;
+
+    document.getElementById('mapImg').src = canvas.toDataURL('image/png');
+    setMapStatus('PDF pagina ' + n + ' van ' + pdfDoc.numPages + ' geladen');
 }
 
 function updateScale() {

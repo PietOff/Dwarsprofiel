@@ -184,7 +184,8 @@
         <span style="margin-left:10px;">Standaardnaam: <input type="text" id="depotLabel" value="Depot" style="width:90px" onchange="renderProfile()"></span>
         <label style="margin-left:10px;"><input type="checkbox" id="showDepotNumbers" checked onchange="renderProfile()"> Nummers in de hopen</label>
         <div id="depotConfig" style="margin-top:10px;"></div>
-        <p style="color:#64748b; font-size:13px; margin:6px 0 0;"><em>Er zijn twee depots. Kies per laag (hierboven) in welk depot de grond terechtkomt; meerdere lagen in hetzelfde depot worden als gemengde hoop getekend. Een depot zonder lagen wordt niet getekend.</em></p>
+        <button onclick="addDepot()" class="btn-add" style="margin-top:4px;">+ Depot Toevoegen</button>
+        <p style="color:#64748b; font-size:13px; margin:6px 0 0;"><em>Voeg zoveel depots toe als nodig. Kies per laag (hierboven) in welk depot de grond terechtkomt; meerdere lagen in hetzelfde depot worden als gemengde hoop getekend. Een depot zonder lagen wordt niet getekend.</em></p>
         <label style="display:inline-block; margin-top:8px;"><input type="checkbox" id="showDepotNote" checked onchange="renderProfile()"> Toelichting onder legenda (meerdere regels toegestaan):</label>
         <textarea id="depotNote" rows="3" style="width:100%; margin-top:5px;" oninput="renderProfile()">De ontgraven grond wordt na het uitvoeren van de geplande werkzaamheden in hetzelfde grondprofiel teruggeplaatst.</textarea>
     </div>
@@ -506,11 +507,8 @@ function addLayer() {
     }
     let defaultBot = (startTop + 0.5).toFixed(1);
 
-    let nextDepot = (layers.length === 0) ? 1 : 2;
-    let depotOptions = '<option value="0">Geen</option>';
-    for (let n = 1; n <= MAX_DEPOTS; n++) {
-        depotOptions += `<option value="${n}" ${n === nextDepot ? 'selected' : ''}>Depot ${n}</option>`;
-    }
+    let nextDepot = Math.min(depotCount, layers.length + 1);
+    let depotOptions = depotOptionsHtml(nextDepot);
 
     let div = document.createElement('div');
     div.className = 'layer';
@@ -530,15 +528,60 @@ function addLayer() {
 }
 
 // --- DEPOT INSTELLINGEN (naam + kant per depot) ---
-// Er zijn altijd precies twee depots beschikbaar zodra depots worden getoond.
-const MAX_DEPOTS = 2;
+// Het aantal depots is variabel: standaard twee, uit te breiden met "+ Depot Toevoegen".
+let depotCount = 2;
 let depotSettings = {};
 
 function getDepotSetting(nr) {
     if (!depotSettings[nr]) {
-        depotSettings[nr] = { name: '', side: (nr === 1) ? 'rechts' : 'links' };
+        // oneven depots standaard rechts, even depots links
+        depotSettings[nr] = { name: '', side: (nr % 2 === 1) ? 'rechts' : 'links' };
     }
     return depotSettings[nr];
+}
+
+function depotOptionsHtml(selected) {
+    let html = `<option value="0" ${selected === 0 ? 'selected' : ''}>Geen</option>`;
+    for (let n = 1; n <= depotCount; n++) {
+        html += `<option value="${n}" ${n === selected ? 'selected' : ''}>Depot ${n}</option>`;
+    }
+    return html;
+}
+
+// Keuzelijsten bij de lagen bijwerken, met behoud van de huidige keuze
+function refreshLayerDepotSelects(remap) {
+    document.querySelectorAll('.layer .depot').forEach(sel => {
+        let v = parseInt(sel.value, 10) || 0;
+        if (remap) v = remap(v);
+        if (v > depotCount) v = 0;
+        sel.innerHTML = depotOptionsHtml(v);
+    });
+}
+
+function rebuildDepotConfig() {
+    document.getElementById('depotConfig').dataset.built = '';
+    renderProfile();
+}
+
+function addDepot() {
+    depotCount++;
+    refreshLayerDepotSelects();
+    rebuildDepotConfig();
+}
+
+function removeDepot(nr) {
+    if (depotCount <= 1) return;
+    // Lagen in dit depot naar "Geen"; hogere nummers schuiven een plek op
+    refreshLayerDepotSelects(v => v === nr ? 0 : (v > nr ? v - 1 : v));
+    let shifted = {};
+    for (let n = 1; n <= depotCount; n++) {
+        if (n === nr || !depotSettings[n]) continue;
+        shifted[n > nr ? n - 1 : n] = depotSettings[n];
+    }
+    depotSettings = shifted;
+    depotCount--;
+    refreshLayerDepotSelects();
+    rebuildDepotConfig();
 }
 
 function setDepotSetting(nr, key, value) {
@@ -550,14 +593,14 @@ function syncDepotConfig(usedNrs) {
     let box = document.getElementById('depotConfig');
     if (box.dataset.built === '1') {
         // alleen de "leeg"-melding bijwerken
-        for (let nr = 1; nr <= MAX_DEPOTS; nr++) {
+        for (let nr = 1; nr <= depotCount; nr++) {
             let hint = box.querySelector(`.depot-cfg[data-nr="${nr}"] .depot-empty`);
             if (hint) hint.style.display = usedNrs.indexOf(nr) === -1 ? '' : 'none';
         }
         return;
     }
     let html = '';
-    for (let nr = 1; nr <= MAX_DEPOTS; nr++) {
+    for (let nr = 1; nr <= depotCount; nr++) {
         let s2 = getDepotSetting(nr);
         html += `<div class="depot-cfg" data-nr="${nr}" style="display:flex; gap:10px; align-items:center; margin-bottom:6px; flex-wrap:wrap;">
             <strong style="min-width:70px;">Depot ${nr}</strong>
@@ -567,6 +610,7 @@ function syncDepotConfig(usedNrs) {
                 <option value="rechts" ${s2.side === 'rechts' ? 'selected' : ''}>Rechts</option>
                 <option value="links" ${s2.side === 'links' ? 'selected' : ''}>Links</option>
             </select></span>
+            ${depotCount > 1 ? `<button onclick="removeDepot(${nr})" class="btn-remove" title="Depot ${nr} verwijderen">X</button>` : ''}
             <em class="depot-empty" style="color:#94a3b8; font-size:13px; display:${usedNrs.indexOf(nr) === -1 ? '' : 'none'};">geen lagen toegewezen</em>
         </div>`;
     }
@@ -592,7 +636,7 @@ function depotTriangleSvg(x0, yBase, w, h, bands, badgeNr) {
     });
     out += `<polygon points="${x0},${yBase} ${apexX},${yBase - h} ${x0 + w},${yBase}" fill="none" stroke="#000" stroke-width="2" stroke-linejoin="round" />`;
 
-    // Nummer-badge, zodat twee depots met dezelfde kleur uit elkaar te houden zijn
+    // Nummer-badge, zodat depots met dezelfde kleur uit elkaar te houden zijn
     if (badgeNr) {
         let r = Math.max(7, Math.min(15, w / 6));
         let cy = yBase - h * 0.33;
@@ -610,7 +654,7 @@ function renderProfile() {
            bottom: parseFloat(row.querySelector('.bot').value),
            color: row.querySelector('.col').value,
            desc: row.querySelector('.desc').value,
-           depot: Math.min(MAX_DEPOTS, parseInt(row.querySelector('.depot') ? row.querySelector('.depot').value : '0', 10) || 0)
+           depot: Math.min(depotCount, parseInt(row.querySelector('.depot') ? row.querySelector('.depot').value : '0', 10) || 0)
        };
     });
     
